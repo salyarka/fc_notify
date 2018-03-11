@@ -5,8 +5,24 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #define PORT "59599"
+
+// get text presentation of client address
+void get_client_addr(const struct sockaddr *addr, char *ip, size_t ip_size,
+		uint16_t *port) {
+	if (addr->sa_family == AF_INET) {
+		//inet_ntop(AF_INET, &(((struct sockaddr_in *)addr)->sin_addr),
+		//		ip, ip_size);
+		//port = ntohs(&((struct sockaddr_in *)addr)->sin_port);
+	} else if (addr->sa_family == AF_INET6) {
+		//inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)addr)->sin6_addr),
+		//		ip, ip_size);
+		//port = ntohs(&((struct sockaddr_in6 *)addr)->sin6_port);
+	}
+
+}
 
 int main(int argc, char *argv[])
 {
@@ -15,8 +31,11 @@ int main(int argc, char *argv[])
 	socklen_t addr_size;
 	int rv, sfd, cfd;
 	int enable = 1;
-	char c_addr_string[INET6_ADDRSTRLEN];
+	char c_ip[INET6_ADDRSTRLEN];
+	int c_port;
 	void *src;
+	struct sockaddr_in peer;
+	int peer_len;
 
 	memset(&hints, 0, sizeof(hints)); // zero the structure
 	hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
@@ -71,22 +90,31 @@ int main(int argc, char *argv[])
 			perror("Cant accept connection");
 			continue;
 		}
-		// TODO: client addr dont prints
-		get_client_addr(c_addr, c_addr_string,
-				sizeof(c_addr_string));
-		printf("Got connection from %s\n", c_addr_string);
+
+
+		getpeername(sfd, (struct sockaddr *)&c_addr, &addr_size);
+		if (c_addr.ss_family == AF_INET) {
+			struct sockaddr_in *sfd = (struct sockaddr_in *)&c_addr;
+			c_port = ntohs(sfd->sin_port);
+			inet_ntop(AF_INET, &sfd->sin_addr, c_ip, sizeof(c_ip));
+		} else {
+			struct sockaddr_in6 *sfd = (struct sockaddr_in6 *)&c_addr;
+			c_port = ntohs(sfd->sin6_port);
+			inet_ntop(AF_INET6, &sfd->sin6_addr, c_ip, sizeof(c_ip));
+		}
+
+
+
+		//get_client_addr(&c_addr, c_ip,
+		//		sizeof(c_ip), c_port);
+
+		//peer_len = sizeof(peer);
+		//getpeername(cfd, &peer, &peer_len);
+		printf("Got connection from %s %d\n", c_ip, c_port);
+		//printf("Got connection from %s %d\n", inet_ntoa(peer.sin_addr), (int)ntohs(peer.sin_port));
+
 	}
 
 	return 0;
 }
 
-// get text presentation of client address
-void get_client_addr(const struct sockaddr *addr, char *s, size_t s_size) {
-	if (addr->sa_family == AF_INET) {
-		inet_ntop(AF_INET, &(((struct sockaddr_in *)addr)->sin_addr),
-				s, s_size);
-	} else if (addr->sa_family == AF_INET6) {
-		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)addr)->sin6_addr),
-				s, s_size);
-	}
-}
