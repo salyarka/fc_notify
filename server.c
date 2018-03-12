@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
 	freeaddrinfo(res);
 	if (r == NULL) {
 		fprintf(stderr, "Failed to bind server socket\n");
+		exit(1);
 	}
 
 	if (listen(sfd, 128) < 0) {
