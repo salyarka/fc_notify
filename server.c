@@ -6,8 +6,25 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
 
 #define PORT "59599"
+
+void setnonblock(int fd)
+{
+	int f;
+
+	if ((f = fcntl(fd, F_GETFL)) < 0) {
+		perror("Cant get flags");
+		exit(1);
+	}
+	f |= O_NONBLOCK;
+	if (fcntl(fd, F_SETFL, f) < 0) {
+		perror("Cant set NONBLOCK");
+		exit(1);
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -65,6 +82,8 @@ int main(int argc, char *argv[])
 		perror("Cant listen connections");
 		exit(1);
 	}
+
+	//setnonblock(sfd);
 
 	while(1) {
 		addr_size = sizeof(c_addr);
