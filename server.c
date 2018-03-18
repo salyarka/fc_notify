@@ -140,7 +140,14 @@ int main(int argc, char *argv[])
                 }
 
                 setnonblock(cfd);
+                ev.events = EPOLLIN | EPOLLET;
+                ev.data.fd = cfd;
+                if (epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &ev) < 0) {
+                    perror("Cant register client socket on epoll instance");
+                    exit(1);
+                }
             }
+
         }
     }
 
