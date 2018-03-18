@@ -15,11 +15,11 @@
 
 /*
  *TODO:
+ * - print address of client from wich data is received and print data
  * - add description
  * - think, ???setnonblock function instead of exit
  *   use return -1 and make abort ???
  * - redesign variables in main function
- * - register for EPOLLIN event for client socket
  * */
 
 
@@ -56,8 +56,8 @@ int main(int argc, char *argv[])
     hints.ai_flags = AI_PASSIVE; // use current IP
 
     if ((rv = getaddrinfo(NULL, PORT, &hints, &res)) != 0) {
-	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-	return 1;
+    	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+	    return 1;
     }
 
     for (r = res; r != NULL; r = r->ai_next) {
@@ -70,8 +70,8 @@ int main(int argc, char *argv[])
         // make the socket reusable
         if (setsockopt(sfd, SOL_SOCKET,
                     SO_REUSEADDR, &enable, sizeof(int)) < 0) {
-        perror("Cant setsockopt");
-        exit(1);
+            perror("Cant setsockopt");
+            exit(1);
         }
 
         // bind socket to address
@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    // register server socket on the epoll instance
     ev.data.fd = sfd;
     ev.events = EPOLLIN;
     if (epoll_ctl(efd, EPOLL_CTL_ADD, sfd, &ev) < 0) {
@@ -118,8 +119,16 @@ int main(int argc, char *argv[])
         }
 
         for (i = 0; i < en; i++) {
+
+            // error condition or hung up happened
+            if ((events[i].events & EPOLLERR) ||
+                    (events[i].events & EPOLLHUP)) {
+                fprintf(stderr, "error epoll event\n");
+                close(events[i].data.fd);
+                continue;
+
             // got event from server socket
-            if (events[i].data.fd == sfd) {
+            } else if (events[i].data.fd == sfd) {
                 if ((cfd = accept(sfd,
                         (struct sockaddr *)&c_addr, &addr_size)) < 0) {
                     // accepted all incoming connections
@@ -139,6 +148,7 @@ int main(int argc, char *argv[])
                     printf("Got connection from %s %s\n", hbuf, sbuf);
                 }
 
+                // register client socket on epoll instance with endge trigger
                 setnonblock(cfd);
                 ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = cfd;
@@ -146,6 +156,15 @@ int main(int argc, char *argv[])
                     perror("Cant register client socket on epoll instance");
                     exit(1);
                 }
+
+            // got data from client
+            } else if (events[i].events & EPOLLIN) {
+                printf("got data from %d descriptor\n", events[i].data.fd);
+
+            // client socket ready for write
+            } else if (events[i].events & EPOLLOUT) {
+                printf("descriptor %d ready to write\n", events[i].data.fd);
+
             }
 
         }
