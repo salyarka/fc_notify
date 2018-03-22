@@ -13,16 +13,6 @@
 #define PORT "59599"
 #define MAX_EV 10
 
-/*
- *TODO:
- * - print address of client from wich data is received and print data
- * - add description
- * - think, ???setnonblock function instead of exit
- *   use return -1 and make abort ???
- * - redesign variables in main function
- * */
-
-
 // makes file non blocking
 void setnonblock(int fd)
 {
@@ -48,6 +38,8 @@ int main(int argc, char *argv[])
     int rv, sfd, cfd, c_port, efd, en, i, enable = 1;
     char c_ip[INET6_ADDRSTRLEN];
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+    char rbuf[512];
+    ssize_t nob;
     void *src;
 
     memset(&hints, 0, sizeof(hints)); // zero the structure
@@ -141,11 +133,16 @@ int main(int argc, char *argv[])
                 }
 
                 // print info about connected client
-                if ((getnameinfo(
+                printf("addr_size is %d\n", addr_size);
+                printf("c_addr storage %d\n", c_addr.ss_family);
+                if ((rv = getnameinfo(
                         (struct sockaddr *)&c_addr, addr_size,
                         hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
                         NI_NUMERICHOST | NI_NUMERICSERV)) == 0) {
-                    printf("Got connection from %s %s\n", hbuf, sbuf);
+                    printf("Client with address %s %s connected (fd %d)\n",
+                            hbuf, sbuf, cfd);
+                } else {
+                    fprintf(stderr, "getnameinfo error %s\n", gai_strerror(rv));
                 }
 
                 // register client socket on epoll instance with endge trigger
@@ -159,7 +156,13 @@ int main(int argc, char *argv[])
 
             // got data from client
             } else if (events[i].events & EPOLLIN) {
-                printf("got data from %d descriptor\n", events[i].data.fd);
+                printf("EPOLLIN\n");
+                while(1) {
+                    //nob = read(events[i].data.fd, rbuf, sizeof(rbuf));
+                    //printf("nob %d\n", nob);
+                    break;
+                }
+                printf("gotfrom %d descriptor\n", events[i].data.fd);
 
             // client socket ready for write
             } else if (events[i].events & EPOLLOUT) {
