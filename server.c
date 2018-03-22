@@ -35,12 +35,10 @@ int main(int argc, char *argv[])
     struct sockaddr_storage c_addr;
     struct epoll_event ev, events[MAX_EV];
     socklen_t addr_size;
-    int rv, sfd, cfd, c_port, efd, en, i, enable = 1;
-    char c_ip[INET6_ADDRSTRLEN];
-    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-    char rbuf[512];
     ssize_t nob;
-    void *src;
+    int rv, sfd, cfd, efd, en, i, enable = 1;
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[512];
+    
 
     memset(&hints, 0, sizeof(hints)); // zero the structure
     hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
@@ -111,7 +109,6 @@ int main(int argc, char *argv[])
         }
 
         for (i = 0; i < en; i++) {
-
             // error condition or hung up happened
             if ((events[i].events & EPOLLERR) ||
                     (events[i].events & EPOLLHUP)) {
@@ -121,6 +118,7 @@ int main(int argc, char *argv[])
 
             // got event from server socket
             } else if (events[i].data.fd == sfd) {
+                addr_size = sizeof(c_addr);
                 if ((cfd = accept(sfd,
                         (struct sockaddr *)&c_addr, &addr_size)) < 0) {
                     // accepted all incoming connections
@@ -142,7 +140,7 @@ int main(int argc, char *argv[])
                     printf("Client with address %s %s connected (fd %d)\n",
                             hbuf, sbuf, cfd);
                 } else {
-                    fprintf(stderr, "getnameinfo error %s\n", gai_strerror(rv));
+                    fprintf(stderr, "getnameinfo: %s\n", gai_strerror(rv));
                 }
 
                 // register client socket on epoll instance with endge trigger
@@ -158,11 +156,24 @@ int main(int argc, char *argv[])
             } else if (events[i].events & EPOLLIN) {
                 printf("EPOLLIN\n");
                 while(1) {
-                    //nob = read(events[i].data.fd, rbuf, sizeof(rbuf));
-                    //printf("nob %d\n", nob);
-                    break;
+                    if ((nob = read(events[i].data.fd, rbuf,
+                            sizeof(rbuf))) < 0) {
+                        if (errno != EAGAIN) {
+                            perror("Cant read data from client socket");
+                        }
+                        // all data have been received
+                        break;
+
+                    // client closed connection
+                    } else if (nob == 0) {
+                        close(events[i].data.fd);
+                        break;
+                    }
+                    if (write(1, rbuf, nob) < 0) {
+                        perror("Cant write to stdout");
+                    }
                 }
-                printf("gotfrom %d descriptor\n", events[i].data.fd);
+                printf("got from %d descriptor\n", events[i].data.fd);
 
             // client socket ready for write
             } else if (events[i].events & EPOLLOUT) {
