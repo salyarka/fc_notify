@@ -38,7 +38,6 @@ int main(int argc, char *argv[])
     ssize_t nob;
     int rv, sfd, cfd, efd, en, i, enable = 1;
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[512];
-    
 
     memset(&hints, 0, sizeof(hints)); // zero the structure
     hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
@@ -52,7 +51,7 @@ int main(int argc, char *argv[])
 
     for (r = res; r != NULL; r = r->ai_next) {
 	    // creating server socket
-	    if ((sfd = socket(r->ai_family, r->ai_socktype,	r->ai_protocol)) < 0) {
+	    if ((sfd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0) {
             perror("Cant create server socket");
             continue;
         }
@@ -121,18 +120,11 @@ int main(int argc, char *argv[])
                 addr_size = sizeof(c_addr);
                 if ((cfd = accept(sfd,
                         (struct sockaddr *)&c_addr, &addr_size)) < 0) {
-                    // accepted all incoming connections
-                    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-                        break;
-                    } else {
-                        perror("Cant acept connection");
-                        continue;
-                    }
+                    perror("Cant acept connection");
+                    continue;
                 }
 
                 // print info about connected client
-                printf("addr_size is %d\n", addr_size);
-                printf("c_addr storage %d\n", c_addr.ss_family);
                 if ((rv = getnameinfo(
                         (struct sockaddr *)&c_addr, addr_size,
                         hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
@@ -175,9 +167,24 @@ int main(int argc, char *argv[])
                 }
                 printf("got from %d descriptor\n", events[i].data.fd);
 
+                // register for epollout for one shot
+                //ev.data.fd = events[i].data.fd
+                ev.events = EPOLLOUT | EPOLLONESHOT;
+                if(epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
+                    perror("Cant change event on client socket to EPOLLOUT");
+                    exit(1);
+                }
+
             // client socket ready for write
             } else if (events[i].events & EPOLLOUT) {
                 printf("descriptor %d ready to write\n", events[i].data.fd);
+
+                // register client socket on epoll instance with endge trigger
+                ev.events = EPOLLIN | EPOLLET;
+                if (epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
+                    perror("Cant register client socket on epoll instance");
+                    exit(1);
+                }
 
             }
 
