@@ -11,6 +11,7 @@
 #include <errno.h>
 
 #define PORT "59599"
+#define MAX_BUF 512
 #define MAX_EV 10
 
 // makes file non blocking
@@ -35,9 +36,9 @@ int main(int argc, char *argv[])
     struct sockaddr_storage c_addr;
     struct epoll_event ev, events[MAX_EV];
     socklen_t addr_size;
-    ssize_t nob;
+    ssize_t nob, tnob = 0;
     int rv, sfd, cfd, efd, en, i, enable = 1;
-    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[512];
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[MAX_BUF + 1];
 
     memset(&hints, 0, sizeof(hints)); // zero the structure
     hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
@@ -161,15 +162,14 @@ int main(int argc, char *argv[])
                         close(events[i].data.fd);
                         break;
                     }
-                    if (write(1, rbuf, nob) < 0) {
-                        perror("Cant write to stdout");
-                    }
+                    // save total number of bytes received
+                    tnob += nob;
                 }
                 printf("got from %d descriptor\n", events[i].data.fd);
 
                 // register for epollout for one shot
-                //ev.data.fd = events[i].data.fd
                 ev.events = EPOLLOUT | EPOLLONESHOT;
+                //ev.data.ptr = "hello";
                 if(epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
                     perror("Cant change event on client socket to EPOLLOUT");
                     exit(1);
@@ -178,7 +178,17 @@ int main(int argc, char *argv[])
             // client socket ready for write
             } else if (events[i].events & EPOLLOUT) {
                 printf("descriptor %d ready to write\n", events[i].data.fd);
+                printf("rbuf %s\n", rbuf);
 
+                /* 
+                 * TODO: make 2 buffers, one for receving and
+                 * second for saving (with realloc)
+                 * */
+
+                rbuf[tnob] = *"\0";
+                send(events[i].data.fd, rbuf, tnob, 0);
+                // reset total number of bytes recived from socket
+                tnob = 0;
                 // register client socket on epoll instance with endge trigger
                 ev.events = EPOLLIN | EPOLLET;
                 if (epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
