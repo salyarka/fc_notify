@@ -10,7 +10,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define PORT "59599"
+#include "fcn.h"
+
 #define MAX_BUF 512
 #define MAX_EV 10
 
@@ -37,7 +38,7 @@ int main(int argc, char *argv[])
     struct epoll_event ev, events[MAX_EV];
     socklen_t addr_size;
     ssize_t nob, tnob = 0;
-    int rv, sfd, cfd, efd, en, i, enable = 1;
+    int rv, sfd, cfd, efd, en, enable = 1;
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[MAX_BUF + 1];
 
     memset(&hints, 0, sizeof(hints)); // zero the structure
@@ -47,7 +48,7 @@ int main(int argc, char *argv[])
 
     if ((rv = getaddrinfo(NULL, PORT, &hints, &res)) != 0) {
     	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-	    return 1;
+	    exit(1);
     }
 
     for (r = res; r != NULL; r = r->ai_next) {
@@ -108,7 +109,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        for (i = 0; i < en; i++) {
+        for (int i = 0; i < en; i++) {
             // error condition or hung up happened
             if ((events[i].events & EPOLLERR) ||
                     (events[i].events & EPOLLHUP)) {
@@ -150,7 +151,7 @@ int main(int argc, char *argv[])
                 printf("EPOLLIN\n");
                 while(1) {
                     if ((nob = read(events[i].data.fd, rbuf,
-                            sizeof(rbuf))) < 0) {
+                            MAX_BUF)) < 0) {
                         if (errno != EAGAIN) {
                             perror("Cant read data from client socket");
                         }
@@ -159,32 +160,30 @@ int main(int argc, char *argv[])
 
                     // client closed connection
                     } else if (nob == 0) {
+                        printf("Client %d disconnected\n", events[i].data.fd);
                         close(events[i].data.fd);
                         break;
                     }
                     // save total number of bytes received
                     tnob += nob;
                 }
-                printf("got from %d descriptor\n", events[i].data.fd);
+                if (nob > 0) {
+                    printf("got from %d descriptor\n", events[i].data.fd);
+                    // register for epollout for one shot
+                    ev.events = EPOLLOUT | EPOLLONESHOT;
 
-                // register for epollout for one shot
-                ev.events = EPOLLOUT | EPOLLONESHOT;
-                //ev.data.ptr = "hello";
-                if(epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
-                    perror("Cant change event on client socket to EPOLLOUT");
-                    exit(1);
+                    if(epoll_ctl(efd, EPOLL_CTL_MOD,
+                                events[i].data.fd, &ev) < 0) {
+                        perror("Cant change event on client "
+                                "socket to EPOLLOUT");
+                        exit(1);
+                    }
                 }
 
             // client socket ready for write
             } else if (events[i].events & EPOLLOUT) {
                 printf("descriptor %d ready to write\n", events[i].data.fd);
                 printf("rbuf %s\n", rbuf);
-
-                /* 
-                 * TODO: make 2 buffers, one for receving and
-                 * second for saving (with realloc)
-                 * */
-
                 rbuf[tnob] = *"\0";
                 send(events[i].data.fd, rbuf, tnob, 0);
                 // reset total number of bytes recived from socket

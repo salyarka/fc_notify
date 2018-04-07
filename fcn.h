@@ -1,4 +1,5 @@
 #define BUF_SIZE 512
+#define PORT "59599"
 
 /* 
  * TODO
@@ -14,9 +15,9 @@ enum msg_type {
     NOTIFY,
     // subscription for the notification about new files in clients directories
     SUBSCRIPTION
-}
+};
 
 struct request {
     char msg[BUF_SIZE];
     enum msg_type type;
-}
+};
