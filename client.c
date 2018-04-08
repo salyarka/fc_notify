@@ -3,8 +3,19 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "fcn.h"
+
+int is_dir(char *path)
+{
+    struct stat path_stat;
+    if (stat(path, &path_stat) < 0) {
+        perror("stat");
+        exit(1);
+    }
+    return S_ISDIR(path_stat.st_mode);
+}
 
 int main(int argc, char *argv[])
 {
@@ -13,6 +24,11 @@ int main(int argc, char *argv[])
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [hostname] [directory]\n", argv[0]);
+        exit(1);
+    }
+
+    if (is_dir(argv[2]) != 1) {
+        fprintf(stderr, "%s is not a directory\n", argv[2]);
         exit(1);
     }
 
@@ -48,7 +64,6 @@ int main(int argc, char *argv[])
     printf("Connected to server\n");
     /*
      * TODO:
-     *  - check that argv[2] is a dir
      *  - add inotify watch for new files in dir
      *  - send message to server
      * */
