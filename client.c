@@ -4,8 +4,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>  // for NAME_MAX
+#include <limits.h>
 
 #include "fcn.h"
+
+// size of buffer is length of inotify_event struct +
+// maximum file length + zero symbol
+#define IBUF_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
+
+/*
+* TODO:
+*  - combine inotify and epoll
+*  - send message to server
+* */
 
 int is_dir(char *path)
 {
@@ -20,7 +32,9 @@ int is_dir(char *path)
 int main(int argc, char *argv[])
 {
     struct addrinfo hints, *res, *r;
-    int rv, sfd;
+    int rv, sfd, inotify_fd, wd, br;
+    char buf[IBUF_SIZE], *p;
+    struct inotify_event *ev;
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [hostname] [directory]\n", argv[0]);
@@ -30,6 +44,29 @@ int main(int argc, char *argv[])
     if (is_dir(argv[2]) != 1) {
         fprintf(stderr, "%s is not a directory\n", argv[2]);
         exit(1);
+    }
+
+    if ((inotify_fd = inotify_init()) < 0) {
+        perror("Cant initialize inotify");
+        exit(1);
+    }
+
+    if ((wd = inotify_add_watch(inotify_fd, argv[2], IN_CREATE)) < 0) {
+        perror("Cant add dir to inotify watch list");
+        exit(1);
+    }
+
+    while (1) { 
+        if ((br = read(inotify_fd, buf, IBUF_SIZE)) < 1) {
+            perror("Cant read from inotify file descriptor");
+            exit(1);
+        }
+
+        for (p = buf; p < buf + br; ) {
+            ev = (struct inotify_event *) p;
+            printf("new file %s\n", ev->name);
+            p += sizeof(struct inotify_event) + ev->len;
+        }
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -62,11 +99,6 @@ int main(int argc, char *argv[])
     }
 
     printf("Connected to server\n");
-    /*
-     * TODO:
-     *  - add inotify watch for new files in dir
-     *  - send message to server
-     * */
    return 0;
 }
 
