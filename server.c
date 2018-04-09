@@ -15,22 +15,6 @@
 #define MAX_BUF 512
 #define MAX_EV 10
 
-// makes file non blocking
-void setnonblock(int fd)
-{
-    int f;
-
-    if ((f = fcntl(fd, F_GETFL)) < 0) {
-        perror("Cant get flags");
-        exit(1);
-    }
-    f |= O_NONBLOCK;
-    if (fcntl(fd, F_SETFL, f) < 0) {
-        perror("Cant set NONBLOCK");
-        exit(1);
-    }
-}
-
 int main(int argc, char *argv[])
 {
     struct addrinfo hints, *res, *r;
@@ -167,7 +151,7 @@ int main(int argc, char *argv[])
                     // save total number of bytes received
                     tnob += nob;
                 }
-                if (nob > 0) {
+                if (tnob > 0) {
                     printf("got from %d descriptor\n", events[i].data.fd);
                     // register for epollout for one shot
                     ev.events = EPOLLOUT | EPOLLONESHOT;

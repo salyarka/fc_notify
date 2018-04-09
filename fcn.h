@@ -1,3 +1,6 @@
+#ifndef FCN_H
+#define FCN_H
+
 #define BUF_SIZE 512
 #define PORT "59599"
 
@@ -21,3 +24,7 @@ struct request {
     char msg[BUF_SIZE];
     enum msg_type type;
 };
+
+void setnonblock(int fd);
+
+#endif
