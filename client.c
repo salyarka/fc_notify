@@ -4,18 +4,21 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <sys/inotify.h>  // for NAME_MAX
-#include <limits.h>
+#include <sys/inotify.h>
+#include <limits.h>  // for NAME_MAX
+#include <sys/epoll.h>
+#include <errno.h>
 
 #include "fcn.h"
 
 // size of buffer is length of inotify_event struct +
 // maximum file length + zero symbol
 #define IBUF_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
+#define MAX_EV 10
+
 
 /*
 * TODO:
-*  - combine inotify and epoll
 *  - send message to server
 * */
 
@@ -32,9 +35,10 @@ int is_dir(char *path)
 int main(int argc, char *argv[])
 {
     struct addrinfo hints, *res, *r;
-    int rv, sfd, inotify_fd, wd, br;
+    int rv, sfd, inotify_fd, wd, br, en, efd;
     char buf[IBUF_SIZE], *p;
-    struct inotify_event *ev;
+    struct inotify_event *iev;
+    struct epoll_event ev, events[MAX_EV];
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [hostname] [directory]\n", argv[0]);
@@ -56,18 +60,18 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    while (1) { 
-        if ((br = read(inotify_fd, buf, IBUF_SIZE)) < 1) {
-            perror("Cant read from inotify file descriptor");
-            exit(1);
-        }
+    //while (1) { 
+    //    if ((br = read(inotify_fd, buf, IBUF_SIZE)) < 1) {
+    //        perror("Cant read from inotify file descriptor");
+    //        exit(1);
+    //    }
 
-        for (p = buf; p < buf + br; ) {
-            ev = (struct inotify_event *) p;
-            printf("new file %s\n", ev->name);
-            p += sizeof(struct inotify_event) + ev->len;
-        }
-    }
+    //    for (p = buf; p < buf + br; ) {
+    //        ev = (struct inotify_event *) p;
+    //        printf("new file %s\n", ev->name);
+    //        p += sizeof(struct inotify_event) + ev->len;
+    //    }
+    //}
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -98,7 +102,68 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    freeaddrinfo(res);
+
     printf("Connected to server\n");
-   return 0;
+
+    setnonblock(sfd);
+    setnonblock(inotify_fd);
+
+    if ((efd = epoll_create1(0)) < 0) {
+        perror("Cant create epoll instance");
+        exit(1);
+    }
+
+    ev.data.fd = sfd;
+    ev.events = EPOLLIN;
+    if (epoll_ctl(efd, EPOLL_CTL_ADD, sfd, &ev) < 0) {
+        perror("Cant register server socket on the epoll instance");
+        exit(1);
+    }
+
+    ev.data.fd = inotify_fd;
+    ev.events = EPOLLIN;
+    if (epoll_ctl(efd, EPOLL_CTL_ADD, inotify_fd, &ev) < 0) {
+        perror("Cant register server socket on the epoll instance");
+        exit(1);
+    }
+
+    while (1) {
+        if ((en = epoll_wait(efd, events, MAX_EV, -1)) < 0) {
+            perror("epoll_wait");
+            exit(1);
+        }
+
+        for (int i = 0; i < en; i++) {
+            if ((events[i].events & EPOLLERR) ||
+                    (events[i].events & EPOLLHUP)) {
+                fprintf(stderr, "error epoll event\n");
+                close(events[i].data.fd);
+                continue;
+            } else if (events[i].data.fd == inotify_fd) {
+                while (1) { 
+                    if ((br = read(inotify_fd, buf, IBUF_SIZE)) < 1) {
+                        if (errno != EAGAIN) {
+                            perror("Cant read from inotify file descriptor");
+                            exit(1);
+                        }
+                        // all data have been received
+                        break;
+                    }
+            
+                    for (p = buf; p < buf + br; ) {
+                        iev = (struct inotify_event *) p;
+                        printf("new file %s\n", iev->name);
+                        p += sizeof(struct inotify_event) + iev->len;
+                    }
+                }
+
+            } else if (events[i].data.fd == sfd) {
+            
+            }
+        }
+    }
+
+    return 0;
 }
 
