@@ -152,8 +152,8 @@ int main(int argc, char *argv[])
                 }
                 if (tnob > 0) {
                     printf("got from %d descriptor\n", events[i].data.fd);
-                    // register for epollout for one shot
-                    ev.events = EPOLLOUT | EPOLLONESHOT;
+                    // register for epollout
+                    ev.events = EPOLLOUT;
 
                     if(epoll_ctl(efd, EPOLL_CTL_MOD,
                                 events[i].data.fd, &ev) < 0) {
