@@ -10,17 +10,12 @@
 #include <errno.h>
 
 #include "fcn.h"
+#include "epoll_wrapper.h"
 
 // size of buffer is length of inotify_event struct +
 // maximum file length + zero symbol
 #define IBUF_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
 #define MAX_EV 10
-
-
-/*
-* TODO:
-*  - send message to server
-* */
 
 int is_dir(char *path)
 {
@@ -38,7 +33,7 @@ int main(int argc, char *argv[])
     int rv, sfd, inotify_fd, wd, br, en, efd;
     char buf[IBUF_SIZE], *p;
     struct inotify_event *iev;
-    struct epoll_event ev, events[MAX_EV];
+    struct epoll_event events[MAX_EV];
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [hostname] [directory]\n", argv[0]);
@@ -59,19 +54,6 @@ int main(int argc, char *argv[])
         perror("Cant add dir to inotify watch list");
         exit(1);
     }
-
-    //while (1) { 
-    //    if ((br = read(inotify_fd, buf, IBUF_SIZE)) < 1) {
-    //        perror("Cant read from inotify file descriptor");
-    //        exit(1);
-    //    }
-
-    //    for (p = buf; p < buf + br; ) {
-    //        ev = (struct inotify_event *) p;
-    //        printf("new file %s\n", ev->name);
-    //        p += sizeof(struct inotify_event) + ev->len;
-    //    }
-    //}
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -109,30 +91,12 @@ int main(int argc, char *argv[])
     setnonblock(sfd);
     setnonblock(inotify_fd);
 
-    if ((efd = epoll_create1(0)) < 0) {
-        perror("Cant create epoll instance");
-        exit(1);
-    }
-
-    ev.data.fd = sfd;
-    ev.events = EPOLLIN;
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, sfd, &ev) < 0) {
-        perror("Cant register server socket on the epoll instance");
-        exit(1);
-    }
-
-    ev.data.fd = inotify_fd;
-    ev.events = EPOLLIN;
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, inotify_fd, &ev) < 0) {
-        perror("Cant register server socket on the epoll instance");
-        exit(1);
-    }
+    efd = e_create();
+    e_add(efd, sfd, EPOLLIN);
+    e_add(efd, inotify_fd, EPOLLIN);
 
     while (1) {
-        if ((en = epoll_wait(efd, events, MAX_EV, -1)) < 0) {
-            perror("epoll_wait");
-            exit(1);
-        }
+        en = e_wait(efd, events);
 
         for (int i = 0; i < en; i++) {
             if ((events[i].events & EPOLLERR) ||

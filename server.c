@@ -10,6 +10,7 @@
 #include <errno.h>
 
 #include "fcn.h"
+#include "epoll_wrapper.h"
 
 #define MAX_BUF 512
 #define MAX_EV 10
@@ -18,7 +19,7 @@ int main(int argc, char *argv[])
 {
     struct addrinfo hints, *res, *r;
     struct sockaddr_storage c_addr;
-    struct epoll_event ev, events[MAX_EV];
+    struct epoll_event events[MAX_EV];
     socklen_t addr_size;
     ssize_t nob, tnob = 0;
     int rv, sfd, cfd, efd, en, enable = 1;
@@ -71,26 +72,12 @@ int main(int argc, char *argv[])
     }
 
     setnonblock(sfd);
-
-    if ((efd = epoll_create1(0)) < 0) {
-        perror("Cant create epoll instance");
-        exit(1);
-    }
-
-    // register server socket on the epoll instance
-    ev.data.fd = sfd;
-    ev.events = EPOLLIN;
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, sfd, &ev) < 0) {
-        perror("Cant register server socket on the epoll instance");
-        exit(1);
-    }
+    efd = e_create();
+    e_add(efd, sfd, EPOLLIN);
 
     while(1) {
         // wait for register events
-        if ((en = epoll_wait(efd, events, MAX_EV, -1)) < 0) {
-            perror("epoll_wait");
-            exit(1);
-        }
+        en = e_wait(efd, events);
 
         for (int i = 0; i < en; i++) {
             // error condition or hung up happened
@@ -122,12 +109,7 @@ int main(int argc, char *argv[])
 
                 // register client socket on epoll instance with endge trigger
                 setnonblock(cfd);
-                ev.events = EPOLLIN | EPOLLET;
-                ev.data.fd = cfd;
-                if (epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &ev) < 0) {
-                    perror("Cant register client socket on epoll instance");
-                    exit(1);
-                }
+                e_add(efd, cfd, EPOLLIN | EPOLLET);
 
             // got data from client
             } else if (events[i].events & EPOLLIN) {
@@ -153,14 +135,7 @@ int main(int argc, char *argv[])
                 if (tnob > 0) {
                     printf("got from %d descriptor\n", events[i].data.fd);
                     // register for epollout
-                    ev.events = EPOLLOUT;
-
-                    if(epoll_ctl(efd, EPOLL_CTL_MOD,
-                                events[i].data.fd, &ev) < 0) {
-                        perror("Cant change event on client "
-                                "socket to EPOLLOUT");
-                        exit(1);
-                    }
+                    e_mod(efd, events[i].data.fd, EPOLLOUT);
                 }
 
             // client socket ready for write
@@ -171,12 +146,8 @@ int main(int argc, char *argv[])
                 send(events[i].data.fd, rbuf, tnob, 0);
                 // reset total number of bytes recived from socket
                 tnob = 0;
-                // register client socket on epoll instance with endge trigger
-                ev.events = EPOLLIN | EPOLLET;
-                if (epoll_ctl(efd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
-                    perror("Cant register client socket on epoll instance");
-                    exit(1);
-                }
+                
+                e_mod(efd, events[i].data.fd, EPOLLIN | EPOLLET);
 
             }
 
