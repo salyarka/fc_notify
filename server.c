@@ -11,6 +11,7 @@
 
 #include "fcn.h"
 #include "epoll_wrapper.h"
+#include "socket_wrapper.h"
 
 #define MAX_BUF 512
 #define MAX_EV 10
@@ -25,52 +26,7 @@ int main(int argc, char *argv[])
     int rv, sfd, cfd, efd, en, enable = 1;
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[MAX_BUF + 1];
 
-    memset(&hints, 0, sizeof(hints)); // zero the structure
-    hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use current IP
-
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &res)) != 0) {
-    	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-	    exit(1);
-    }
-
-    for (r = res; r != NULL; r = r->ai_next) {
-	    // creating server socket
-	    if ((sfd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0) {
-            perror("Cant create server socket");
-            continue;
-        }
-
-        // make the socket reusable
-        if (setsockopt(sfd, SOL_SOCKET,
-                    SO_REUSEADDR, &enable, sizeof(int)) < 0) {
-            perror("Cant setsockopt");
-            exit(1);
-        }
-
-        // bind socket to address
-        if (bind(sfd, r->ai_addr, r->ai_addrlen) < 0) {
-            close(sfd);
-            perror("Cant bind server socket");
-            continue;
-        }
-
-        break;
-    }
-
-    freeaddrinfo(res);
-
-    if (r == NULL) {
-        fprintf(stderr, "Failed to bind server socket\n");
-        exit(1);
-    }
-
-    if (listen(sfd, 128) < 0) {
-        perror("Cant listen connections");
-        exit(1);
-    }
-
+    sfd = make_server_socket(PORT);
     setnonblock(sfd);
     efd = e_create();
     e_add(efd, sfd, EPOLLIN);
