@@ -3,8 +3,6 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
-//#include <sys/types.h>
-//#include <sys/epoll.h>
 #include <errno.h>
 
 #include "fcn.h"
@@ -20,8 +18,8 @@ int main(int argc, char *argv[])
     struct epoll_event events[MAX_EV];
     socklen_t addr_size;
     ssize_t nob, tnob = 0;
-    int rv, sfd, cfd, efd, en;
-    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[MAX_BUF + 1];
+    int sfd, cfd, efd, en;
+    char addr_str[ADDR_STR_LEN], rbuf[MAX_BUF + 1];
 
     sfd = make_server_socket(PORT);
     setnonblock(sfd);
@@ -49,16 +47,9 @@ int main(int argc, char *argv[])
                     continue;
                 }
 
-                // print info about connected client
-                if ((rv = getnameinfo(
-                        (struct sockaddr *)&c_addr, addr_size,
-                        hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
-                        NI_NUMERICHOST | NI_NUMERICSERV)) == 0) {
-                    printf("Client with address %s %s connected (fd %d)\n",
-                            hbuf, sbuf, cfd);
-                } else {
-                    fprintf(stderr, "getnameinfo: %s\n", gai_strerror(rv));
-                }
+                get_str_address((struct sockaddr *)&c_addr, addr_size,
+                        addr_str, ADDR_STR_LEN);
+                printf("Client with address %s connected\n", addr_str);
 
                 // register client socket on epoll instance with endge trigger
                 setnonblock(cfd);

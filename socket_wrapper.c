@@ -5,7 +5,8 @@
 #include <netdb.h>
 #include <unistd.h>
 
-int make_server_socket(const char *service) {
+int make_server_socket(const char *service)
+{
     struct addrinfo hints, *res, *r;
     int sfd, rv, enable = 1;
 
@@ -56,5 +57,24 @@ int make_server_socket(const char *service) {
     }
 
     return sfd;
+}
+
+//char *get_str_address(const struct sockaddr *addr, socklen_t addr_size,
+void get_str_address(const struct sockaddr *addr, socklen_t addr_size,
+        char *str, int str_len)
+{
+    int r;
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+
+    if ((r = getnameinfo(addr, addr_size,
+                    hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
+                    NI_NUMERICHOST | NI_NUMERICSERV)) == 0) {
+        snprintf(str, str_len, "%s %s", hbuf, sbuf);
+    } else {
+        fprintf(stderr, "getnameinfo: %s\n", gai_strerror(r));
+        snprintf(str, str_len, "unknown address");
+    }
+
+    //return str;
 }
 
