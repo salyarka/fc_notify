@@ -3,10 +3,8 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/epoll.h>
+//#include <sys/types.h>
+//#include <sys/epoll.h>
 #include <errno.h>
 
 #include "fcn.h"
@@ -18,12 +16,11 @@
 
 int main(int argc, char *argv[])
 {
-    struct addrinfo hints, *res, *r;
     struct sockaddr_storage c_addr;
     struct epoll_event events[MAX_EV];
     socklen_t addr_size;
     ssize_t nob, tnob = 0;
-    int rv, sfd, cfd, efd, en, enable = 1;
+    int rv, sfd, cfd, efd, en;
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV], rbuf[MAX_BUF + 1];
 
     sfd = make_server_socket(PORT);

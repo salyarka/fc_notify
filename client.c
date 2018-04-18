@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <sys/inotify.h>
 #include <limits.h>  // for NAME_MAX
-#include <sys/epoll.h>
+//#include <sys/epoll.h>
 #include <errno.h>
 
 #include "fcn.h"
