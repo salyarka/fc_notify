@@ -5,24 +5,36 @@
 #include <netdb.h>
 #include <unistd.h>
 
-int make_server_socket(const char *service)
+
+static void get_addr(const char *service, const char *host,
+                        struct addrinfo **addr)
 {
-    struct addrinfo hints, *res, *r;
-    int sfd, rv, enable = 1;
+    struct addrinfo hints;
+    int result_code;
 
-    memset(&hints, 0, sizeof(hints)); // zero the structure
-    hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use current IP
+    hints.ai_flags = AI_PASSIVE;
 
-    if ((rv = getaddrinfo(NULL, service, &hints, &res)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    if ((result_code = getaddrinfo(host, service, &hints, addr)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(result_code));
         exit(1);
     }
+}
 
-    for (r = res; r != NULL; r = r->ai_next) {
+
+int make_server_socket(const char *service)
+{
+    struct addrinfo *res_addrinfo, *addr;
+    int sfd, enable = 1;
+
+    get_addr(service, NULL, &res_addrinfo);
+
+    for (addr = res_addrinfo; addr != NULL; addr = addr->ai_next) {
         // creating server socket
-        if ((sfd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0) {
+        if ((sfd = socket(addr->ai_family, addr->ai_socktype,
+                        addr->ai_protocol)) < 0) {
             perror("Cant create server socket");
             continue;
         }
@@ -35,7 +47,7 @@ int make_server_socket(const char *service)
         }
 
         // bind socket to address
-        if (bind(sfd, r->ai_addr, r->ai_addrlen) < 0) {
+        if (bind(sfd, addr->ai_addr, addr->ai_addrlen) < 0) {
             close(sfd);
             perror("Cant bind server socket");
             continue;
@@ -44,9 +56,9 @@ int make_server_socket(const char *service)
         break;
     }
 
-    freeaddrinfo(res);
+    freeaddrinfo(res_addrinfo);
 
-    if (r == NULL) {
+    if (addr == NULL) {
         fprintf(stderr, "Failed to bind server socket\n");
         exit(1);
     }
@@ -59,7 +71,6 @@ int make_server_socket(const char *service)
     return sfd;
 }
 
-//char *get_str_address(const struct sockaddr *addr, socklen_t addr_size,
 void get_str_address(const struct sockaddr *addr, socklen_t addr_size,
         char *str, int str_len)
 {
@@ -74,7 +85,39 @@ void get_str_address(const struct sockaddr *addr, socklen_t addr_size,
         fprintf(stderr, "getnameinfo: %s\n", gai_strerror(r));
         snprintf(str, str_len, "unknown address");
     }
-
-    //return str;
 }
 
+int make_connection(const char *host, const char *port)
+{
+    int sfd;
+    struct addrinfo *res_addrinfo, *addr;
+
+    get_addr(port, host, &res_addrinfo);
+
+    for (addr = res_addrinfo; addr != NULL; addr = addr->ai_next) {
+        if ((sfd = socket(addr->ai_family, addr->ai_socktype,
+                        addr->ai_protocol)) < 0) {
+            perror("Cant create client socket");
+            continue;
+        }
+
+        if (connect(sfd, addr->ai_addr, addr->ai_addrlen) < 0) {
+            perror("Cant connect");
+            close(sfd);
+            continue;
+        }
+
+        break;
+    }
+
+    if (addr == NULL) {
+        fprintf(stderr, "Cant connect with server\n");
+        exit(1);
+    }
+
+    freeaddrinfo(res_addrinfo);
+
+    printf("Connected to server\n");
+
+    return sfd;
+}

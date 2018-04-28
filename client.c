@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <netdb.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
 #include <limits.h>  // for NAME_MAX
-//#include <sys/epoll.h>
 #include <errno.h>
 
 #include "fcn.h"
 #include "epoll_wrapper.h"
+#include "socket_wrapper.h"
 
 // size of buffer is length of inotify_event struct +
 // maximum file length + zero symbol
@@ -29,8 +28,7 @@ int is_dir(char *path)
 
 int main(int argc, char *argv[])
 {
-    struct addrinfo hints, *res, *r;
-    int rv, sfd, inotify_fd, wd, br, en, efd;
+    int sfd, inotify_fd, wd, br, en, efd;
     char buf[IBUF_SIZE], *p;
     struct inotify_event *iev;
     struct epoll_event events[MAX_EV];
@@ -55,38 +53,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    if ((rv = getaddrinfo(argv[1], PORT, &hints, &res)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        exit(1);
-    }
-
-    for (r = res; r != NULL; r = r->ai_next) {
-        if ((sfd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0) {
-            perror("Cant create client socket");
-            continue;
-        }
-
-        if (connect(sfd, r->ai_addr, r->ai_addrlen) < 0) {
-            perror("Cant connect");
-            close(sfd);
-            continue;
-        }
-
-        break;
-    }
-
-    if (r == NULL) {
-        fprintf(stderr, "Cant connect with server\n");
-        exit(1);
-    }
-
-    freeaddrinfo(res);
-
-    printf("Connected to server\n");
+    sfd = make_connection(argv[1], PORT);
 
     setnonblock(sfd);
     setnonblock(inotify_fd);
